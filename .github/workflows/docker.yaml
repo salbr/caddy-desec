@@ -96,6 +96,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
+          platforms: linux/amd64,linux/arm64/v8, linux/arm32/v6, linux/arm32/v7, riscv64
           context: .
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
