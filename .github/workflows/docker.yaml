@@ -77,19 +77,21 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_SECRET }}
-
+          
+      - name: Get Caddy version
+        id: caddy_version
+        run: |
+          CADDY_VERSION=$(docker run --rm caddy:latest caddy version | cut -d ' ' -f 1)
+          echo "version=${CADDY_VERSION}" >> $GITHUB_OUTPUT
+          
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.caddy_version.outputs.version }}
 
       - name: Build and push
         uses: docker/build-push-action@v5
