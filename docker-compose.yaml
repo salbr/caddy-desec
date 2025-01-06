@@ -1,0 +1,12 @@
+services:
+  caddy-desec:
+    container_name: caddy-desec
+    restart: unless-stopped
+    image: salbr/caddy-desec:latest
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+volumes:
+  caddy_data:
+  caddy_config:
