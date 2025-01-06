@@ -1,2 +1,2 @@
 # caddy-desec
-Caddy with DESEc Plugin
+Caddy with DESEC Plugin
