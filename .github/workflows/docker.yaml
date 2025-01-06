@@ -1,0 +1,157 @@
+name: Docker Build
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Check for base image updates daily
+  push:
+    branches:
+      - master
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - master
+      - main
+
+env:
+  DOCKER_BUILDKIT: '1'
+  IMAGE_NAME: ${{ github.repository_owner }}/caddy-desec
+
+jobs:
+  check-base-image:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+    steps:
+      - name: Check base image for updates
+        id: check
+        run: |
+          BASE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' caddy:latest)
+          echo "Current base image digest: $BASE_DIGEST"
+          
+          # Get the last known digest from GitHub
+          LAST_DIGEST=$(curl -s "https://api.github.com/repos/${{ github.repository }}/actions/variables/last_caddy_digest" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            | jq -r '.value // empty')
+          
+          if [ "$BASE_DIGEST" != "$LAST_DIGEST" ]; then
+            echo "Base image has been updated"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "No updates to base image"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
+
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+      
+      - name: Check file permissions
+        run: |
+          test -x "$(pwd)/Dockerfile"
+          test -x "$(pwd)/docker-compose.yml"
+
+  build:
+    needs: [validate]
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'schedule' && needs.check-base-image.outputs.should_build == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Pull and test image
+        run: |
+          # Pull the image we just built
+          docker pull ${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::8}
+          
+          # Basic functionality tests
+          echo "Testing Caddy version..."
+          docker run --rm ${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::8} caddy version
+          
+          echo "Testing deSEC plugin..."
+          docker run --rm ${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::8} caddy list-modules | grep desec
+          
+          # Test container startup
+          echo "Testing container startup..."
+          docker run -d --name caddy-test ${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::8}
+          sleep 5
+          docker inspect caddy-test | grep '"Status": "running"'
+          docker stop caddy-test
+          docker rm caddy-test
+
+  scan:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::8}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+  update-digest:
+    needs: [build, test, scan]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Update last known digest
+        run: |
+          BASE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' caddy:latest)
+          curl -X PATCH \
+            "https://api.github.com/repos/${{ github.repository }}/actions/variables/last_caddy_digest" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d "{\"value\":\"$BASE_DIGEST\"}"
