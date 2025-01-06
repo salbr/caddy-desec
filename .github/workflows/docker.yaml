@@ -57,7 +57,7 @@ jobs:
       - name: Check file permissions
         run: |
           test -x "$(pwd)/Dockerfile"
-          test -x "$(pwd)/docker-compose.yml"
+          test -x "$(pwd)/docker-compose.yaml"
 
   build:
     needs: [validate]
