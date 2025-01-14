@@ -2,7 +2,7 @@ name: Docker Build
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Check for base image updates daily
+    - cron: '0 0 * * 6'  # Check for base image updates weekly
   push:
     branches:
       - master
