@@ -28,6 +28,7 @@ jobs:
       - name: Check base image for updates
         id: check
         run: |
+          docker pull caddy:latest
           BASE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' caddy:latest)
           echo "Current base image digest: $BASE_DIGEST"
           
