@@ -113,18 +113,18 @@ jobs:
       - name: Pull and test image
         run: |
           # Pull the image we just built
-          docker pull ${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::8}
+          docker pull ${{ env.IMAGE_NAME }}:latest
           
           # Basic functionality tests
           echo "Testing Caddy version..."
-          docker run --rm ${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::8} caddy version
+          docker run --rm ${{ env.IMAGE_NAME }}:latest caddy version
           
           echo "Testing deSEC plugin..."
-          docker run --rm ${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::8} caddy list-modules | grep desec
+          docker run --rm ${{ env.IMAGE_NAME }}:latest caddy list-modules | grep desec
           
           # Test container startup
           echo "Testing container startup..."
-          docker run -d --name caddy-test ${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::8}
+          docker run -d --name caddy-test ${{ env.IMAGE_NAME }}:latest
           sleep 5
           docker inspect caddy-test | grep '"Status": "running"'
           docker stop caddy-test
@@ -138,7 +138,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::8}
+          image-ref: ${{ env.IMAGE_NAME }}:latest
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true
