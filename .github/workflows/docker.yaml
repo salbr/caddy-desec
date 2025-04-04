@@ -61,7 +61,9 @@ jobs:
           test -f "$(pwd)/docker-compose.yaml"
 
   build:
-    needs: [validate]
+    needs:
+      - validate
+      - check-base-image
     if: |
       github.event_name == 'push' ||
       github.event_name == 'pull_request' ||
