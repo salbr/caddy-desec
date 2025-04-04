@@ -21,7 +21,7 @@ env:
 jobs:
   check-base-image:
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || github.event_name == 'push'
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
     steps:
