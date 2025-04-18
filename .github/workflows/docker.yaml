@@ -2,7 +2,8 @@ name: Docker Build
 
 on:
   schedule:
-    - cron: '0 0 * * 6'  # Check for base image updates weekly
+    - cron: '0 0 * * 6' # Check for base image updates weekly
+  workflow_dispatch:
   push:
     branches:
       - master
